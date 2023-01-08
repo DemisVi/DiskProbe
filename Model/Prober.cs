@@ -5,7 +5,6 @@ using System.Threading;
 using System.IO;
 using System.Threading.Tasks;
 using DiskProbe.Extensions;
-using System.Windows;
 
 namespace DiskProbe.Model;
 
@@ -74,7 +73,7 @@ public class Prober
                 File.WriteAllBytes(Path.Combine(_workingDirectory, hash.ToHexString()), buffer);
             }
             catch (DirectoryNotFoundException) { }
-            catch (FileNotFoundException) 
+            catch (FileNotFoundException)
             {
                 if (File.Exists(hash.ToHexString())) File.Delete(hash.ToHexString());
             }
@@ -90,6 +89,8 @@ public class Prober
     {
         var files = Directory.GetFiles(_workingDirectory);
         var total = files.Length - 1;
+        var totalBad = 0;
+        var totalBadBytes = 0L;
 
         foreach (var f in files)
         {
@@ -99,17 +100,21 @@ public class Prober
 
             if (hash.ToHexString() != Path.GetFileName(f))
             {
-                _progressReporter.Status($"{Array.IndexOf(files, f)} part check failed.");
-                MessageBox.Show("SHA1 sum of written data are not the same as read.", "SHA1 error");
-                break;
+                _progressReporter.Status($"{Array.IndexOf(files, f)} chunk check failed.");
+
+                totalBadBytes += new FileInfo(f).Length;
+                totalBad++;
             }
             else
             {
                 _progressReporter.Report((int)((Array.IndexOf(files, f)) * 100 / total));
-                _progressReporter.Status($"{Array.IndexOf(files, f)} / {total} part check OK.");
+                _progressReporter.Status($"{Array.IndexOf(files, f)} / {total} chunk check OK.");
             }
         }
         Directory.Delete(_workingDirectory, true);
+        _progressReporter.Status($"Total chunks {files.Length - 1}.");
+        _progressReporter.Status($"Total bad chunks {totalBad}.");
+        if (totalBad > 0) _progressReporter.Status($"~ {totalBadBytes:N0} bytes lost.");
         _progressReporter.Done(false);
     }
 }
