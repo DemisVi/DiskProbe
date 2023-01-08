@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net7.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>usb-drive-001.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Model\bin\**" />
+    <Compile Remove="Model\obj\**" />
+    <Compile Remove="publish\**" />
+    <EmbeddedResource Remove="Model\bin\**" />
+    <EmbeddedResource Remove="Model\obj\**" />
+    <EmbeddedResource Remove="publish\**" />
+    <None Remove="Model\bin\**" />
+    <None Remove="Model\obj\**" />
+    <None Remove="publish\**" />
+    <Page Remove="Model\bin\**" />
+    <Page Remove="Model\obj\**" />
+    <Page Remove="publish\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Model\Program.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Management" Version="7.0.0" />
+    <PackageReference Include="System.Runtime" Version="4.3.1" />
+  </ItemGroup>
+
+</Project>
