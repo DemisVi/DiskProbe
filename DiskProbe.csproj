@@ -9,22 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Model\bin\**" />
-    <Compile Remove="Model\obj\**" />
     <Compile Remove="publish\**" />
-    <EmbeddedResource Remove="Model\bin\**" />
-    <EmbeddedResource Remove="Model\obj\**" />
     <EmbeddedResource Remove="publish\**" />
-    <None Remove="Model\bin\**" />
-    <None Remove="Model\obj\**" />
     <None Remove="publish\**" />
-    <Page Remove="Model\bin\**" />
-    <Page Remove="Model\obj\**" />
     <Page Remove="publish\**" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Remove="Model\Program.cs" />
   </ItemGroup>
 
   <ItemGroup>

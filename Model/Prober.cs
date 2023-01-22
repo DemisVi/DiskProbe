@@ -11,19 +11,18 @@ namespace DiskProbe.Model;
 public class Prober
 {
     private const string _workDirectoryPrefix = ".DiskProbe";
-    private readonly string _workingDirectory = "";
     private readonly SHA1 _sha = SHA1.Create();
     private readonly Random _rand = new(DateTime.Now.Microsecond);
-    private readonly CancellationTokenSource cts = new();
-    private readonly DriveInfo _driveInfo;
-    private readonly ProgressReporter _progressReporter;
+    private readonly static object _lock = new();
+    private CancellationTokenSource cts = new();
+    private string _workingDirectory = "";
+    private DriveInfo? _driveInfo;
+    private ProgressReporter? _progressReporter;
+    private static Prober? _instance;
 
-    public Prober(string driveName, ProgressReporter progressReporter)
-    {
-        _progressReporter = progressReporter;
-        _driveInfo = new(driveName);
-        _workingDirectory = Path.Combine(_driveInfo.Name, _workDirectoryPrefix);
-    }
+    private Prober() { }
+
+    public static Prober Instance => _instance ??= new Prober();
 
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
     static extern bool GetDiskFreeSpace(string lpRootPathName,
@@ -32,26 +31,41 @@ public class Prober
        out ulong lpNumberOfFreeClusters,
        out ulong lpTotalNumberOfClusters);
 
-    public void Start() =>
+    public void Start(string driveName, ProgressReporter progressReporter)
+    {
+        _progressReporter = progressReporter;
+        _driveInfo = new(driveName);
+        _workingDirectory = Path.Combine(_driveInfo.Name, _workDirectoryPrefix);
+        cts = new();
+
         Task.Factory.StartNew(BeginCheck, cts.Token);
+    }
 
     public void Stop()
     {
         cts.Cancel();
-        if (Directory.Exists(_workingDirectory))
+        lock (_lock)
         {
-            Directory.Delete(_workingDirectory, true);
+            if (Directory.Exists(_workingDirectory))
+            {
+                Directory.Delete(_workingDirectory, true);
+            }
         }
     }
 
     private ulong GetBlockSize()
     {
+        if (_driveInfo is null) throw new NullReferenceException();
+
         GetDiskFreeSpace(_driveInfo.Name, out var secPerCluster, out var bytePerSector, out var _, out var _);
         return secPerCluster * bytePerSector * (ulong)sbyte.MaxValue;
     }
 
     private void BeginCheck()
     {
+        if (_driveInfo is null) throw new NullReferenceException();
+        if (_progressReporter is null) throw new NullReferenceException();
+
         if (!Directory.Exists(_workingDirectory))
             Directory.CreateDirectory(_workingDirectory);
 
@@ -61,21 +75,16 @@ public class Prober
 
         while ((ulong)_driveInfo.AvailableFreeSpace > 0)
         {
-            if (cts.IsCancellationRequested) return;
-
-            if (blockSize > (ulong)_driveInfo.AvailableFreeSpace && (ulong)_driveInfo.AvailableFreeSpace > 0)
-                buffer = new byte[(ulong)_driveInfo.AvailableFreeSpace];
-
-            _rand.NextBytes(buffer);
-            var hash = _sha.ComputeHash(buffer);
-            try
+            lock (_lock)
             {
+                if (cts.IsCancellationRequested) return;
+
+                if (blockSize > (ulong)_driveInfo.AvailableFreeSpace && (ulong)_driveInfo.AvailableFreeSpace > 0)
+                    buffer = new byte[(ulong)_driveInfo.AvailableFreeSpace];
+
+                _rand.NextBytes(buffer);
+                var hash = _sha.ComputeHash(buffer);
                 File.WriteAllBytes(Path.Combine(_workingDirectory, hash.ToHexString()), buffer);
-            }
-            catch (DirectoryNotFoundException) { }
-            catch (FileNotFoundException)
-            {
-                if (File.Exists(hash.ToHexString())) File.Delete(hash.ToHexString());
             }
 
             _progressReporter.Report((int)((driveSize - _driveInfo.AvailableFreeSpace) * 100 / driveSize));
@@ -87,6 +96,9 @@ public class Prober
 
     private void EndCheck()
     {
+        if (_driveInfo is null) throw new NullReferenceException();
+        if (_progressReporter is null) throw new NullReferenceException();
+
         var files = Directory.GetFiles(_workingDirectory);
         var total = files.Length - 1;
         var totalBad = 0;
@@ -111,10 +123,29 @@ public class Prober
                 _progressReporter.Status($"{Array.IndexOf(files, f)} / {total} chunk check OK.");
             }
         }
-        Directory.Delete(_workingDirectory, true);
-        _progressReporter.Status($"Total chunks {files.Length - 1}.");
-        _progressReporter.Status($"Total bad chunks {totalBad}.");
-        if (totalBad > 0) _progressReporter.Status($"~ {totalBadBytes:N0} bytes lost.");
-        _progressReporter.Done(false);
+
+        StatusReport();
+
+        lock (_lock)
+        {
+            if (cts.IsCancellationRequested) return;
+            else if (Directory.Exists(_workingDirectory))
+            {
+                Directory.Delete(_workingDirectory, true);
+            }
+        }
+
+        void StatusReport()
+        {
+            if (_progressReporter is null) throw new NullReferenceException();
+            if (files is not null)
+            {
+                _progressReporter.Status($"Total chunks {files.Length - 1}.");
+                _progressReporter.Status($"Total bad chunks {totalBad}.");
+                if (totalBad > 0) _progressReporter.Status($"~ {totalBadBytes:N0} bytes lost.");
+                _progressReporter.Done(false);
+
+            }
+        }
     }
 }

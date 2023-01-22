@@ -18,16 +18,13 @@ namespace DiskProbe.ViewModel
 {
     internal class MainViewModel : INotifyPropertyChanged
     {
-        private const float bytesInGb = 1_073_741_824F;
-        private const float bytesInMb = 1_048_576F;
-
         private object _lock = new();
 
         private readonly ManagementEventWatcher? _watcher;
         private readonly BackgroundWorker _proberWorker = new();
         public event PropertyChangedEventHandler? PropertyChanged;
         private ProgressReporter _progressReporter = new();
-        private Prober prober;
+        private Prober prober = Prober.Instance;
 
         public MainViewModel()
         {
@@ -77,8 +74,8 @@ namespace DiskProbe.ViewModel
                 var di = new DriveInfo(SelectedDisk);
                 LogBox.Insert(0, string.Format("{0}. Free space: {1:N2}/{2:N2} Gb",
                                          di.IsReady ? "Ready" : "Not Ready",
-                                         (float)di.TotalFreeSpace / bytesInGb,
-                                         (float)di.TotalSize / bytesInGb));
+                                         (float)di.TotalFreeSpace / Constants.bytesInGb,
+                                         (float)di.TotalSize / Constants.bytesInGb));
                 LogBox.Insert(0, string.Format("{0} ({1}) {2} {3}",
                                          (string.IsNullOrEmpty(di.VolumeLabel) ? "No Label" : di.VolumeLabel),
                                          di.Name,
@@ -121,8 +118,7 @@ namespace DiskProbe.ViewModel
 
         private void PerformExecute(object? parameter)
         {
-            prober = new Prober(SelectedDisk, _progressReporter);
-            prober.Start();
+            prober.Start(SelectedDisk, _progressReporter);
             IsProberRunning = true;
         }
 
@@ -142,8 +138,7 @@ namespace DiskProbe.ViewModel
 
         private void ProberWorker_DoWork(object? sender, DoWorkEventArgs e)
         {
-            prober = new Prober(SelectedDisk, _progressReporter);
-            prober.Start();
+            prober.Start(SelectedDisk, _progressReporter);
         }
     }
 }
